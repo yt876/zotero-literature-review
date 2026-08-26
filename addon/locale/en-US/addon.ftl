@@ -1,8 +1,5 @@
 startup-begin = Literature Review plugin loading
 startup-finish = Literature Review plugin ready
-menuitem-generate-review = Generate Literature Review
-menuitem-litreview-menu = Literature Review Tools
-menuitem-summarize-only = Summarize Only
 prefs-title = Literature Review
 review-title = Literature Review Generator
 review-no-items = Please select at least one literature item

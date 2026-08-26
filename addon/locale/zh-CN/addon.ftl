@@ -1,8 +1,5 @@
 startup-begin = 文献综述插件加载中
 startup-finish = 文献综述插件已就绪
-menuitem-generate-review = 生成文献综述
-menuitem-litreview-menu = 文献综述工具
-menuitem-summarize-only = 仅生成文献摘要
 prefs-title = 文献综述
 review-title = 文献综述生成器
 review-no-items = 请先选中至少一个文献条目

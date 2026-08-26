@@ -52,7 +52,14 @@ export async function callLLM(
     stream: false,
   };
 
-  ztoolkit.log("LLM Request:", endpoint, "model:", model, "timeout:", timeoutMs);
+  ztoolkit.log(
+    "LLM Request:",
+    endpoint,
+    "model:",
+    model,
+    "timeout:",
+    timeoutMs,
+  );
 
   const response = await Zotero.HTTP.request("POST", endpoint, {
     headers: {
@@ -140,11 +147,20 @@ async function mapReduceSummarize(
   const maxInputChars = Math.min(maxContextTokens * 2, 12000);
 
   const chunks = splitTextIntoChunks(fullText, maxInputChars);
-  ztoolkit.log(`MapReduce: text length=${fullText.length}, chunks=${chunks.length}`);
+  ztoolkit.log(
+    `MapReduce: text length=${fullText.length}, chunks=${chunks.length}`,
+  );
 
   if (chunks.length === 1) {
     // Short enough, just summarize directly
-    return await directSummarize(title, authors, year, journal, chunks[0], extraInfo);
+    return await directSummarize(
+      title,
+      authors,
+      year,
+      journal,
+      chunks[0],
+      extraInfo,
+    );
   }
 
   // MAP phase: summarize each chunk
@@ -246,7 +262,14 @@ export async function summarizeSingleItem(
   journal: string,
   extraInfo: string,
 ): Promise<string> {
-  return await mapReduceSummarize(title, authors, year, journal, abstract, extraInfo);
+  return await mapReduceSummarize(
+    title,
+    authors,
+    year,
+    journal,
+    abstract,
+    extraInfo,
+  );
 }
 
 /**
@@ -262,8 +285,7 @@ export async function generateReview(
   topic?: string,
 ): Promise<string> {
   const customPrompt =
-    (getPref("promptReview") as string) ||
-    getDefaultReviewPrompt();
+    (getPref("promptReview") as string) || getDefaultReviewPrompt();
 
   const systemMessage: LLMMessage = {
     role: "system",

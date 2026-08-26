@@ -1,12 +1,12 @@
 # Zotero Literature Review Plugin
 
-[![zotero target version](https://img.shields.io/badge/Zotero-7-green?style=flat-square&logo=zotero&logoColor=CC2936)](https://www.zotero.org)
+[![zotero target version](https://img.shields.io/badge/Zotero-10-green?style=flat-square&logo=zotero&logoColor=CC2936)](https://www.zotero.org)
 [![Using Zotero Plugin Template](https://img.shields.io/badge/Using-Zotero%20Plugin%20Template-blue?style=flat-square&logo=github)](https://github.com/windingwind/zotero-plugin-template)
 [![license](https://img.shields.io/badge/License-AGPL--3.0-blue?style=flat-square)](LICENSE)
 
-一款基于大语言模型（LLM）的 Zotero 7 文献综述插件。自动提取 Zotero 文献库中的元数据与 PDF 全文，利用 LLM 生成**单篇文献摘要**和**多篇文献综述**。
+一款基于大语言模型（LLM）的 Zotero 8-10 文献综述插件。自动提取 Zotero 文献库中的元数据与 PDF 全文，利用 LLM 生成**单篇文献摘要**和**多篇文献综述**。
 
-A Zotero 7 plugin that leverages Large Language Models (LLMs) to automatically generate **single-item summaries** and **multi-item literature reviews** from your Zotero library.
+A Zotero 8-10 plugin that leverages Large Language Models (LLMs) to automatically generate **single-item summaries** and **multi-item literature reviews** from your Zotero library.
 
 ---
 
@@ -26,7 +26,9 @@ A Zotero 7 plugin that leverages Large Language Models (LLMs) to automatically g
 ### 从 Release 安装（推荐）
 
 1. 前往 [Releases](../../releases) 页面下载最新的 `.xpi` 文件。
-2. 在 Zotero 7 中，打开 `工具` → `附加组件`（Add-ons），点击齿轮图标 → `Install Add-on From File...`，选择下载的 `.xpi` 文件。
+2. 在 Zotero 8 或更高版本中，打开 `工具` → `附加组件`（Add-ons），点击齿轮图标 → `Install Add-on From File...`，选择下载的 `.xpi` 文件。
+
+> **兼容性**：本插件针对 **Zotero 10** 适配，兼容 Zotero 8、9、10（`manifest.json` 中 `strict_min_version` 为 `8.0`，`strict_max_version` 为 `10.0.*`）。
 
 ### 从源码构建
 
@@ -47,14 +49,14 @@ npm run build
 
 安装插件后，打开 Zotero → `编辑` → `设置` → `Literature Review`，填写以下信息：
 
-| 设置项 | 说明 | 示例 |
-|--------|------|------|
-| API URL | OpenAI 兼容的 API 地址 | `https://api.openai.com/v1/chat/completions` |
-| API Key | 你的 API 密钥 | `sk-...` |
-| Model | 模型名称 | `gpt-4o`、`deepseek-chat` |
-| Temperature | 生成温度（0-1000，实际值/1000） | `700`（即 0.7） |
-| Max Tokens | 最大生成 token 数 | `4096` |
-| Timeout | API 请求超时（秒） | `120` |
+| 设置项      | 说明                            | 示例                                         |
+| ----------- | ------------------------------- | -------------------------------------------- |
+| API URL     | OpenAI 兼容的 API 地址          | `https://api.openai.com/v1/chat/completions` |
+| API Key     | 你的 API 密钥                   | `sk-...`                                     |
+| Model       | 模型名称                        | `gpt-4o`、`deepseek-chat`                    |
+| Temperature | 生成温度（0-1000，实际值/1000） | `700`（即 0.7）                              |
+| Max Tokens  | 最大生成 token 数               | `4096`                                       |
+| Timeout     | API 请求超时（秒）              | `120`                                        |
 
 ### 2. 生成单篇文献摘要
 
@@ -99,7 +101,7 @@ src/
 
 - [Node.js](https://nodejs.org/) (LTS)
 - [Git](https://git-scm.com/)
-- [Zotero 7](https://www.zotero.org/support/beta_builds)
+- [Zotero 10](https://www.zotero.org/support/beta_builds)
 
 ### 开发流程
 

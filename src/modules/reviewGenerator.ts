@@ -40,25 +40,33 @@ function extractItemInfo(item: Zotero.Item): {
   const abstract = (item.getField("abstractNote") as string) || "";
 
   // Get journal
-  let journal = "";
-  try { journal = (item.getField("publicationTitle") as string) || ""; } catch (_) {}
-  if (!journal) {
-    try { journal = (item.getField("proceedingsTitle") as string) || ""; } catch (_) {}
-  }
-  if (!journal) {
-    try { journal = (item.getField("bookTitle") as string) || ""; } catch (_) {}
-  }
+  const journal =
+    safeGetField(item, "publicationTitle") ||
+    safeGetField(item, "proceedingsTitle") ||
+    safeGetField(item, "bookTitle");
 
   // Extra info: DOI, tags, etc.
   let extraInfo = "";
-  try {
-    const doi = item.getField("DOI") as string;
-    if (doi) extraInfo += "DOI: " + doi + "\n";
-  } catch (_) {}
-  const tags = item.getTags().map((t: any) => t.tag).join(", ");
+  const doi = safeGetField(item, "DOI");
+  if (doi) extraInfo += "DOI: " + doi + "\n";
+  const tags = item
+    .getTags()
+    .map((t: any) => t.tag)
+    .join(", ");
   if (tags) extraInfo += "标签: " + tags + "\n";
 
   return { title, authors, year, abstract, journal, extraInfo };
+}
+
+/**
+ * Safely read a field that may not exist for the item's type.
+ */
+function safeGetField(item: Zotero.Item, field: string): string {
+  try {
+    return (item.getField(field) as string) || "";
+  } catch {
+    return "";
+  }
 }
 
 /**
@@ -72,7 +80,12 @@ async function getItemFullText(item: Zotero.Item): Promise<string> {
 
     const content = await bestAttachment.attachmentText;
     if (content && content.length > 0) {
-      ztoolkit.log("Full text length:", content.length, "for:", item.getField("title"));
+      ztoolkit.log(
+        "Full text length:",
+        content.length,
+        "for:",
+        item.getField("title"),
+      );
       // Return full text - MapReduce will handle chunking
       return content;
     }
@@ -86,15 +99,16 @@ async function getItemFullText(item: Zotero.Item): Promise<string> {
  * Main entry point: Generate literature review from selected items.
  */
 export async function generateLiteratureReview(): Promise<void> {
-  const items = Zotero.getActiveZoteroPane().getSelectedItems();
+  const pane = Zotero.getActiveZoteroPane();
+  const items = pane?.getSelectedItems() || [];
 
   if (!items || items.length === 0) {
     showError(getString("review-no-items"));
     return;
   }
 
-  const regularItems = items.filter(
-    (item: Zotero.Item) => item.isRegularItem(),
+  const regularItems = items.filter((item: Zotero.Item) =>
+    item.isRegularItem(),
   );
 
   if (regularItems.length === 0) {
@@ -130,7 +144,18 @@ export async function generateLiteratureReview(): Promise<void> {
 
       popupWin.changeLine({
         progress,
-        text: "[" + progress + "%] " + getString("review-summarizing") + " (" + (i + 1) + "/" + regularItems.length + "): " + info.title.substring(0, 40) + "...",
+        text:
+          "[" +
+          progress +
+          "%] " +
+          getString("review-summarizing") +
+          " (" +
+          (i + 1) +
+          "/" +
+          regularItems.length +
+          "): " +
+          info.title.substring(0, 40) +
+          "...",
       });
 
       // Prefer full text, fall back to abstract
@@ -165,7 +190,11 @@ export async function generateLiteratureReview(): Promise<void> {
           title: info.title,
           authors: info.authors,
           year: info.year,
-          summary: "[总结失败: " + e.message + "] 摘要: " + (info.abstract || "").substring(0, 200),
+          summary:
+            "[总结失败: " +
+            e.message +
+            "] 摘要: " +
+            (info.abstract || "").substring(0, 200),
           itemID: item.id,
         });
       }
@@ -179,13 +208,7 @@ export async function generateLiteratureReview(): Promise<void> {
 
     for (let i = 0; i < summaries.length; i++) {
       const s = summaries[i];
-      await writeChildNote(
-        s.itemID,
-        s.title,
-        s.authors,
-        s.year,
-        s.summary,
-      );
+      await writeChildNote(s.itemID, s.title, s.authors, s.year, s.summary);
     }
 
     // Step 3: Generate combined review
@@ -232,18 +255,35 @@ async function writeChildNote(
   summary: string,
 ): Promise<Zotero.Item> {
   let noteContent = "<h2>文献总结: " + escapeHTML(title) + "</h2>\n";
-  noteContent += "<p><strong>" + escapeHTML(authors) + " (" + escapeHTML(year) + ")</strong></p>\n";
-  noteContent += "<p><em>由 Zotero Literature Review 插件自动生成 - " + new Date().toLocaleString() + "</em></p>\n";
+  noteContent +=
+    "<p><strong>" +
+    escapeHTML(authors) +
+    " (" +
+    escapeHTML(year) +
+    ")</strong></p>\n";
+  noteContent +=
+    "<p><em>由 Zotero Literature Review 插件自动生成 - " +
+    new Date().toLocaleString() +
+    "</em></p>\n";
   noteContent += "<hr/>\n";
   noteContent += markdownToHTML(summary);
 
   const note = new Zotero.Item("note");
-  note.libraryID = Zotero.Items.get(parentItemID).libraryID;
+  const parentItem = Zotero.Items.get(parentItemID);
+  if (!parentItem) {
+    throw new Error("Parent item not found: " + parentItemID);
+  }
+  note.libraryID = parentItem.libraryID;
   note.parentID = parentItemID;
   note.setNote(noteContent);
   await note.saveTx();
 
-  ztoolkit.log("Child note created for item:", parentItemID, "note ID:", note.id);
+  ztoolkit.log(
+    "Child note created for item:",
+    parentItemID,
+    "note ID:",
+    note.id,
+  );
   return note;
 }
 
@@ -261,11 +301,33 @@ async function writeReviewNote(
   }>,
   review: string,
 ): Promise<void> {
-  const currentLibraryID = Zotero.getActiveZoteroPane().getSelectedLibraryID();
+  const pane = Zotero.getActiveZoteroPane();
+
+  // Zotero 10: singular selection getters throw. Prefer the library of the
+  // source items; fall back to the first selected library when available.
+  let currentLibraryID = items[0]?.libraryID as number;
+  if (!currentLibraryID && pane) {
+    if (typeof pane.getSelectedLibraryIDs === "function") {
+      currentLibraryID = pane.getSelectedLibraryIDs()[0];
+    } else {
+      currentLibraryID = pane.getSelectedLibraryID() as number;
+    }
+  }
+  currentLibraryID = currentLibraryID ?? Zotero.Libraries.userLibraryID;
 
   let noteContent = "<h1>" + getString("review-note-title") + "</h1>\n";
-  noteContent += "<p><em>" + getString("review-note-generated") + " " + new Date().toLocaleString() + "</em></p>\n";
-  noteContent += "<p><em>" + getString("review-note-item-count") + ": " + items.length + "</em></p>\n";
+  noteContent +=
+    "<p><em>" +
+    getString("review-note-generated") +
+    " " +
+    new Date().toLocaleString() +
+    "</em></p>\n";
+  noteContent +=
+    "<p><em>" +
+    getString("review-note-item-count") +
+    ": " +
+    items.length +
+    "</em></p>\n";
   noteContent += "<hr/>\n";
 
   // Section 1: Literature Review
@@ -274,22 +336,38 @@ async function writeReviewNote(
   noteContent += "<hr/>\n";
 
   // Section 2: Individual Summaries
-  noteContent += "<h2>" + getString("review-note-summaries-section") + "</h2>\n";
+  noteContent +=
+    "<h2>" + getString("review-note-summaries-section") + "</h2>\n";
   for (let i = 0; i < summaries.length; i++) {
     const s = summaries[i];
     noteContent += "<h3>" + (i + 1) + ". " + escapeHTML(s.title) + "</h3>\n";
-    noteContent += "<p><strong>" + escapeHTML(s.authors) + " (" + escapeHTML(s.year) + ")</strong></p>\n";
+    noteContent +=
+      "<p><strong>" +
+      escapeHTML(s.authors) +
+      " (" +
+      escapeHTML(s.year) +
+      ")</strong></p>\n";
     noteContent += markdownToHTML(s.summary);
     noteContent += "<br/>\n";
   }
 
   // Section 3: References
-  noteContent += "<h2>" + getString("review-note-references-section") + "</h2>\n";
+  noteContent +=
+    "<h2>" + getString("review-note-references-section") + "</h2>\n";
   noteContent += "<ol>\n";
   for (let i = 0; i < items.length; i++) {
     const item = items[i];
     const info = extractItemInfo(item);
-    noteContent += "<li>" + escapeHTML(info.authors) + " (" + escapeHTML(info.year) + "). " + escapeHTML(info.title) + ". <em>" + escapeHTML(info.journal) + "</em>.</li>\n";
+    noteContent +=
+      "<li>" +
+      escapeHTML(info.authors) +
+      " (" +
+      escapeHTML(info.year) +
+      "). " +
+      escapeHTML(info.title) +
+      ". <em>" +
+      escapeHTML(info.journal) +
+      "</em>.</li>\n";
   }
   noteContent += "</ol>\n";
 
@@ -297,20 +375,39 @@ async function writeReviewNote(
   note.libraryID = currentLibraryID;
   note.setNote(noteContent);
 
-  const collection = Zotero.getActiveZoteroPane().getSelectedCollection();
-  if (collection) {
+  // Zotero 10: getSelectedCollection() throws; use getSelectedCollections().
+  // A note can belong to multiple collections, so add it to every selected one.
+  let collections: Zotero.Collection[] = [];
+  if (pane) {
+    if (typeof pane.getSelectedCollections === "function") {
+      collections = pane.getSelectedCollections();
+    } else {
+      const single = pane.getSelectedCollection();
+      if (single) collections = [single];
+    }
+  }
+  for (const collection of collections) {
     note.addToCollection(collection.id);
   }
 
   await note.saveTx();
 
-  // Relate note to all source items
-  for (const item of items) {
-    note.addRelatedItem(item);
-    item.addRelatedItem(note);
-    await item.saveTx();
-  }
-  await note.saveTx();
+  // Relate note to all source items.
+  // Zotero 10: wrap in a transaction and stage an undo action so all the
+  // related-item changes land on the undo stack as a single undoable step.
+  await Zotero.DB.executeTransaction(async () => {
+    for (const item of items) {
+      note.addRelatedItem(item);
+      item.addRelatedItem(note);
+    }
+    if (typeof Zotero.UndoHistory?.stageAction === "function") {
+      Zotero.UndoHistory.stageAction("undo-action-add-related");
+    }
+    await note.saveTx();
+    for (const item of items) {
+      await item.saveTx();
+    }
+  });
 
   ztoolkit.log("Review note created with ID:", note.id);
 }
@@ -375,15 +472,16 @@ function showError(message: string): void {
  * Generate summaries only (no combined review), write as child notes.
  */
 export async function generateSummariesOnly(): Promise<void> {
-  const items = Zotero.getActiveZoteroPane().getSelectedItems();
+  const pane = Zotero.getActiveZoteroPane();
+  const items = pane?.getSelectedItems() || [];
 
   if (!items || items.length === 0) {
     showError(getString("review-no-items"));
     return;
   }
 
-  const regularItems = items.filter(
-    (item: Zotero.Item) => item.isRegularItem(),
+  const regularItems = items.filter((item: Zotero.Item) =>
+    item.isRegularItem(),
   );
 
   if (regularItems.length === 0) {
@@ -410,7 +508,18 @@ export async function generateSummariesOnly(): Promise<void> {
 
       popupWin.changeLine({
         progress,
-        text: "[" + progress + "%] " + getString("review-summarizing") + " (" + (i + 1) + "/" + regularItems.length + "): " + info.title.substring(0, 40) + "...",
+        text:
+          "[" +
+          progress +
+          "%] " +
+          getString("review-summarizing") +
+          " (" +
+          (i + 1) +
+          "/" +
+          regularItems.length +
+          "): " +
+          info.title.substring(0, 40) +
+          "...",
       });
 
       // Prefer full text, fall back to abstract

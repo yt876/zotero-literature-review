@@ -1,4 +1,4 @@
-﻿import { getString, initLocale } from "./utils/locale";
+﻿import { getLocaleID, getString, initLocale } from "./utils/locale";
 import { registerPrefsScripts } from "./modules/preferenceScript";
 import { createZToolkit } from "./utils/ztoolkit";
 import {
@@ -20,6 +20,9 @@ async function onStartup() {
   await Promise.all(
     Zotero.getMainWindows().map((win) => onMainWindowLoad(win)),
   );
+
+  // Register the items context menu once via the official MenuManager API.
+  registerRightClickMenu();
 
   addon.data.initialized = true;
 }
@@ -58,9 +61,6 @@ async function onMainWindowLoad(win: _ZoteroTypes.MainWindow): Promise<void> {
     text: `[50%] ${getString("startup-begin")}`,
   });
 
-  // Register right-click menu
-  registerRightClickMenu();
-
   // Register stylesheet
   registerStyleSheet(win);
 
@@ -87,61 +87,57 @@ function registerStyleSheet(win: _ZoteroTypes.MainWindow) {
 
 /**
  * Register right-click context menu items for literature review.
+ *
+ * Uses the official `Zotero.MenuManager` API (introduced in Zotero 8), which
+ * automatically removes the menu DOM elements when the plugin shuts down.
  */
 function registerRightClickMenu() {
+  if (typeof Zotero.MenuManager?.registerMenu !== "function") {
+    return false;
+  }
+
   const menuIcon = `chrome://${addon.data.config.addonRef}/content/icons/favicon@0.5x.png`;
 
-  // Main menu item: Generate Literature Review
-  ztoolkit.Menu.register("item", {
-    tag: "menuitem",
-    id: "zotero-itemmenu-litreview-generate",
-    label: getString("menuitem-generate-review"),
-    commandListener: (_ev) => {
-      addon.hooks.onGenerateReview();
-    },
-    icon: menuIcon,
-    getVisibility: (_elem, _ev) => {
-      const items = Zotero.getActiveZoteroPane().getSelectedItems();
-      if (!items || items.length === 0) return false;
-      const regularItems = items.filter((item: Zotero.Item) =>
-        item.isRegularItem(),
-      );
-      return regularItems.length >= 1;
-    },
-  });
+  const hasRegularItems = (items?: Zotero.Item[]) =>
+    (items || []).some((item) => item.isRegularItem());
 
-  // Submenu with additional options
-  ztoolkit.Menu.register(
-    "item",
-    {
-      tag: "menu",
-      id: "zotero-itemmenu-litreview-menu",
-      label: getString("menuitem-litreview-menu"),
-      icon: menuIcon,
-      children: [
-        {
-          tag: "menuitem",
-          id: "zotero-itemmenu-litreview-summarize",
-          label: getString("menuitem-summarize-only"),
-          commandListener: (_ev) => {
-            addon.hooks.onSummarizeOnly();
-          },
+  return Zotero.MenuManager.registerMenu({
+    menuID: "litreview-item-menu",
+    pluginID: addon.data.config.addonID,
+    target: "main/library/item",
+    menus: [
+      {
+        // Main menu item: Generate Literature Review
+        menuType: "menuitem",
+        l10nID: getLocaleID("menuitem-generate-review"),
+        icon: menuIcon,
+        onShowing: (_ev, context) => {
+          context.setVisible(hasRegularItems(context.items));
         },
-      ],
-      getVisibility: (_elem, _ev) => {
-        const items = Zotero.getActiveZoteroPane().getSelectedItems();
-        if (!items || items.length === 0) return false;
-        const regularItems = items.filter((item: Zotero.Item) =>
-          item.isRegularItem(),
-        );
-        return regularItems.length >= 1;
+        onCommand: () => {
+          addon.hooks.onGenerateReview();
+        },
       },
-    },
-    "after",
-    Zotero.getMainWindow().document?.querySelector(
-      "#zotero-itemmenu-litreview-generate",
-    ) as XUL.MenuItem,
-  );
+      {
+        // Submenu with additional options
+        menuType: "submenu",
+        l10nID: getLocaleID("menuitem-litreview-menu"),
+        icon: menuIcon,
+        menus: [
+          {
+            menuType: "menuitem",
+            l10nID: getLocaleID("menuitem-summarize-only"),
+            onShowing: (_ev, context) => {
+              context.setVisible(hasRegularItems(context.items));
+            },
+            onCommand: () => {
+              addon.hooks.onSummarizeOnly();
+            },
+          },
+        ],
+      },
+    ],
+  });
 }
 
 async function onMainWindowUnload(_win: Window): Promise<void> {
@@ -150,6 +146,7 @@ async function onMainWindowUnload(_win: Window): Promise<void> {
 
 function onShutdown(): void {
   ztoolkit.unregisterAll();
+  Zotero.MenuManager?.unregisterMenu("litreview-item-menu");
   addon.data.alive = false;
   // @ts-expect-error - Plugin instance is not typed
   delete Zotero[addon.data.config.addonInstance];
